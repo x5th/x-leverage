@@ -1,0 +1,26 @@
+[package]
+name = "xleverage-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anchor-lang = { workspace = true }
+financing_engine = { path = "../programs/financing_engine" }
+lp_vault = { path = "../programs/lp_vault" }
+treasury_engine = { path = "../programs/treasury_engine" }
+oracle_framework = { path = "../programs/oracle_framework" }
+governance = { path = "../programs/governance" }
+settlement_engine = { path = "../programs/settlement_engine" }
+liquidation_engine = { path = "../programs/liquidation_engine" }
+solana-program-test = { workspace = true }
+solana-sdk = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+
+[lib]
+path = "src/lib.rs"
+
+[[test]]
+name = "integration"
+harness = true
+

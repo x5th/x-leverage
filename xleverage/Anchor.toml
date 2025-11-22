@@ -1,0 +1,25 @@
+[features]
+seeds = false
+skip-lint = false
+
+[workspace]
+types = "client/types"
+
+[programs.localnet]
+financing_engine = "Fina1111111111111111111111111111111111111111"
+liquidation_engine = "Liqd1111111111111111111111111111111111111111"
+lp_vault = "LPvt1111111111111111111111111111111111111111"
+treasury_engine = "Tres1111111111111111111111111111111111111111"
+oracle_framework = "Orcl1111111111111111111111111111111111111111"
+governance = "Govr1111111111111111111111111111111111111111"
+settlement_engine = "Setl1111111111111111111111111111111111111111"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "Localnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "anchor test"
