@@ -6,6 +6,28 @@ declare_id!("LPvt1111111111111111111111111111111111111111");
 pub mod lp_vault {
     use super::*;
 
+    pub fn initialize_vault(ctx: Context<InitializeVault>, authority: Pubkey) -> Result<()> {
+        let vault = &mut ctx.accounts.vault;
+        vault.total_shares = 0;
+        vault.vault_usdc_balance = 0;
+        vault.locked_for_financing = 0;
+        vault.utilization = 0;
+        vault.authority = authority;
+        Ok(())
+    }
+
+    pub fn migrate_vault_authority(
+        ctx: Context<MigrateVaultAuthority>,
+        authority: Pubkey,
+    ) -> Result<()> {
+        let vault = &mut ctx.accounts.vault;
+        if vault.authority != Pubkey::default() {
+            vault.assert_authority(ctx.accounts.authority.key())?;
+        }
+        vault.authority = authority;
+        Ok(())
+    }
+
     pub fn deposit_usdc(ctx: Context<DepositUsdc>, amount: u64) -> Result<()> {
         let vault = &mut ctx.accounts.vault;
         require!(amount > 0, VaultError::ZeroAmount);
@@ -42,12 +64,14 @@ pub mod lp_vault {
 
     pub fn mint_shares(ctx: Context<ManageShares>, amount: u64) -> Result<()> {
         let vault = &mut ctx.accounts.vault;
+        vault.assert_authority(ctx.accounts.authority.key())?;
         vault.total_shares = vault.total_shares.saturating_add(amount);
         Ok(())
     }
 
     pub fn burn_shares(ctx: Context<ManageShares>, amount: u64) -> Result<()> {
         let vault = &mut ctx.accounts.vault;
+        vault.assert_authority(ctx.accounts.authority.key())?;
         require!(vault.total_shares >= amount, VaultError::InsufficientShares);
         vault.total_shares = vault.total_shares.saturating_sub(amount);
         Ok(())
@@ -55,6 +79,7 @@ pub mod lp_vault {
 
     pub fn allocate_financing(ctx: Context<AllocateFinancing>, amount: u64) -> Result<()> {
         let vault = &mut ctx.accounts.vault;
+        vault.assert_authority(ctx.accounts.authority.key())?;
         require!(
             amount <= vault.vault_usdc_balance,
             VaultError::InsufficientLiquidity
@@ -93,12 +118,36 @@ pub struct WithdrawUsdc<'info> {
 pub struct ManageShares<'info> {
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: Account<'info, LPVaultState>,
+    pub authority: Signer<'info>,
 }
 
 #[derive(Accounts)]
 pub struct AllocateFinancing<'info> {
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: Account<'info, LPVaultState>,
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct InitializeVault<'info> {
+    #[account(
+        init,
+        seeds = [b"vault"],
+        bump,
+        payer = payer,
+        space = 8 + LPVaultState::LEN
+    )]
+    pub vault: Account<'info, LPVaultState>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct MigrateVaultAuthority<'info> {
+    #[account(mut, seeds = [b"vault"], bump)]
+    pub vault: Account<'info, LPVaultState>,
+    pub authority: Signer<'info>,
 }
 
 #[account]
@@ -107,10 +156,16 @@ pub struct LPVaultState {
     pub vault_usdc_balance: u64,
     pub locked_for_financing: u64,
     pub utilization: u64,
+    pub authority: Pubkey,
 }
 
 impl LPVaultState {
-    pub const LEN: usize = 8 * 4;
+    pub const LEN: usize = 8 * 4 + 32;
+
+    pub fn assert_authority(&self, authority: Pubkey) -> Result<()> {
+        require_keys_eq!(authority, self.authority, VaultError::Unauthorized);
+        Ok(())
+    }
 
     // LP APY model placeholder: APY = utilization * base_rate
     pub fn lp_apy(&self, base_rate_bps: u64) -> u64 {
@@ -167,4 +222,6 @@ pub enum VaultError {
     UnderCollateralized,
     #[msg("Share price regression detected")]
     SharePriceRegression,
+    #[msg("Unauthorized authority")]
+    Unauthorized,
 }
