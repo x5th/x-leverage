@@ -10,6 +10,11 @@ export const PROGRAM_IDS = {
   settlement: new PublicKey("Setl1111111111111111111111111111111111111111"),
 };
 
+export const ENDPOINTS = {
+  oracle: "http://oracle.mainnet.x1.xyz:3000/",
+  rpc: "https://testnet.x1.xyz",
+};
+
 export const pdas = {
   financing: (user: PublicKey, collateralMint: PublicKey) =>
     PublicKey.findProgramAddressSync(
@@ -38,4 +43,17 @@ export const math = {
     return Math.floor((collateral * mBps) / denom);
   },
 };
+
+export async function fetchOraclePrice(pair: string): Promise<number> {
+  const baseUrl = ENDPOINTS.oracle.replace(/\/$/, "");
+  const response = await fetch(`${baseUrl}/price?pair=${encodeURIComponent(pair)}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch oracle price for ${pair}: ${response.statusText}`);
+  }
+  const data = (await response.json()) as { price: number };
+  if (typeof data.price !== "number") {
+    throw new Error(`Oracle response missing price for ${pair}`);
+  }
+  return data.price;
+}
 

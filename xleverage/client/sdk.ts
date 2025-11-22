@@ -1,7 +1,20 @@
 import * as anchor from "@coral-xyz/anchor";
-import { pdas } from "./utils";
+import { ENDPOINTS, fetchOraclePrice, pdas } from "./utils";
 
-const provider = anchor.AnchorProvider.env();
+const envProvider = (() => {
+  try {
+    return anchor.AnchorProvider.env();
+  } catch (_) {
+    return null;
+  }
+})();
+
+const connection = envProvider?.connection
+  ?? new anchor.web3.Connection(process.env.ANCHOR_PROVIDER_URL ?? ENDPOINTS.rpc, "confirmed");
+const wallet = envProvider?.wallet ?? anchor.Wallet.local();
+const provider = new anchor.AnchorProvider(connection, wallet, {
+  preflightCommitment: envProvider?.opts?.preflightCommitment ?? "confirmed",
+});
 anchor.setProvider(provider);
 
 const financingProgram = anchor.workspace.FinancingEngine as anchor.Program;
@@ -11,6 +24,16 @@ const treasuryProgram = anchor.workspace.TreasuryEngine as anchor.Program;
 const oracleProgram = anchor.workspace.OracleFramework as anchor.Program;
 const governanceProgram = anchor.workspace.Governance as anchor.Program;
 const settlementProgram = anchor.workspace.SettlementEngine as anchor.Program;
+
+export async function fetchAndUpdateOracle(symbol: string) {
+  const price = await fetchOraclePrice(symbol);
+  const [oracle] = pdas.oracle(provider.wallet.publicKey);
+  await oracleProgram.methods
+    .updateOraclePrice({ syntheticTwap: {} }, new anchor.BN(Math.trunc(price)))
+    .accounts({ oracle, authority: provider.wallet.publicKey })
+    .rpc();
+  return price;
+}
 
 export async function openFinancing(params: {
   collateralMint: anchor.web3.PublicKey;
@@ -90,6 +113,7 @@ export async function settle(state: anchor.web3.PublicKey, obligations: number, 
 
 // Example orchestrated flow for docs/tests.
 export async function exampleFlow(collateralMint: anchor.web3.PublicKey) {
+  await fetchAndUpdateOracle("USDC-USD");
   const state = await openFinancing({
     collateralMint,
     collateralAmount: 1_000,

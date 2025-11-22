@@ -18,7 +18,7 @@ settlement_engine = "Setl1111111111111111111111111111111111111111"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "https://testnet.x1.xyz"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
