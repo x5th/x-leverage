@@ -27,6 +27,10 @@ Governance (XGT) orchestrates parameters, timelock, and upgrades.
 ## Client SDK
 `client/sdk.ts` exposes typed helpers for all programs with example flows for open → monitor → liquidate → settle, while `client/utils.ts` provides PDA helpers and math utilities.
 
+## Network & Oracles
+- Default RPC target is `https://testnet.x1.xyz` (configurable via `ANCHOR_PROVIDER_URL`).
+- External price data is sourced from `http://oracle.mainnet.x1.xyz:3000/`; the SDK exposes `fetchOraclePrice` for convenience.
+
 ## Testing
 Integration tests under `tests/` cover financing lifecycle, liquidation, oracle failures, LP vault edges, treasury compounding, governance flow, and settlement waterfall.
 
