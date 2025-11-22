@@ -1,7 +1,10 @@
 #![cfg(test)]
 
 use anchor_lang::prelude::*;
-use financing_engine::{dynamic_liquidation_threshold, financing_amount_from_collateral, ltv_model, required_liquidation_gap};
+use financing_engine::{
+    dynamic_liquidation_threshold, financing_amount_from_collateral, ltv_model,
+    required_liquidation_gap,
+};
 use lp_vault::LPVaultState;
 use settlement_engine::{SettlementState, SettlementType};
 use std::str::FromStr;
@@ -35,6 +38,7 @@ fn lp_deposit_withdraw_edge() {
         vault_usdc_balance: 0,
         locked_for_financing: 0,
         utilization: 0,
+        authority: Pubkey::default(),
     };
     assert_eq!(vault.share_price(), 1_000_000);
     vault.total_shares = 1_000;
@@ -46,6 +50,23 @@ fn lp_deposit_withdraw_edge() {
     assert!(vault.utilization > 0);
     let apy = vault.lp_apy(1200);
     assert!(apy > 0);
+}
+
+#[test]
+fn lp_vault_rejects_unauthorized() {
+    let authority = Pubkey::new_unique();
+    let mut vault = LPVaultState {
+        total_shares: 100,
+        vault_usdc_balance: 10_000,
+        locked_for_financing: 0,
+        utilization: 0,
+        authority,
+    };
+
+    let unauthorized = Pubkey::new_unique();
+    assert!(vault.assert_authority(unauthorized).is_err());
+
+    assert!(vault.assert_authority(authority).is_ok());
 }
 
 #[test]
@@ -104,4 +125,3 @@ fn settlement_waterfall_distribution() {
     settlement.profit_share = settlement.user_share;
     assert!(settlement.profit_share > 0);
 }
-
