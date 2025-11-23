@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>X-Leverage Control Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="nav">
+      <div class="brand">
+        <div class="brand-mark">XL</div>
+        <div class="brand-copy">
+          <span class="brand-name">X-Leverage</span>
+          <span class="brand-sub">Protocol Control</span>
+        </div>
+      </div>
+      <div class="nav-actions">
+        <button class="ghost">Docs</button>
+        <button class="ghost">SDK</button>
+        <button class="primary">Launch droplet UI</button>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Next-gen leverage orchestration</p>
+          <h1>Command, monitor, and de-risk the full protocol surface.</h1>
+          <p class="lede">A sleek control surface for financing, liquidation, oracles, LP vaults, and settlement. Designed for fast droplet deployments with zero guesswork.</p>
+          <div class="hero-cta">
+            <button class="primary large">Start with testnet</button>
+            <button class="ghost large">View architecture</button>
+          </div>
+        </div>
+        <div class="hero-panels">
+          <div class="panel">
+            <div class="panel-header">
+              <span>Live Health</span>
+              <span class="chip success">Synchronized</span>
+            </div>
+            <div class="health-grid" id="healthGrid"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <span>Settlement Timeline</span>
+              <span class="chip neutral">Auto</span>
+            </div>
+            <div class="timeline" id="timeline"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Portfolio Overview</p>
+            <h2>All positions at a glance</h2>
+            <p class="muted">Filter by lifecycle, spot anomalies instantly, and dispatch liquidations confidently.</p>
+          </div>
+          <div class="filters">
+            <select id="statusFilter">
+              <option value="all">All statuses</option>
+              <option value="open">Open</option>
+              <option value="warning">Warning</option>
+              <option value="liquidation">Liquidation</option>
+              <option value="settled">Settled</option>
+            </select>
+            <button class="ghost" id="refresh">Refresh snapshot</button>
+          </div>
+        </div>
+        <div class="cards" id="positionCards"></div>
+      </section>
+
+      <section class="grid-2">
+        <div class="section card">
+          <div class="section-head compact">
+            <div>
+              <p class="eyebrow">Oracle Framework</p>
+              <h3>Price feeds & confidence</h3>
+            </div>
+            <button class="ghost" id="toggleStale">Toggle stale markers</button>
+          </div>
+          <div class="oracles" id="oracleList"></div>
+        </div>
+        <div class="section card">
+          <div class="section-head compact">
+            <div>
+              <p class="eyebrow">Automation</p>
+              <h3>Action queue</h3>
+            </div>
+            <button class="ghost" id="clearQueue">Clear queue</button>
+          </div>
+          <div class="queue" id="actionQueue"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
