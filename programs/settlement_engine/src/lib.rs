@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("Setl1111111111111111111111111111111111111111");
+declare_id!("Set1111111111111111111111111111111111111111");
 
 #[program]
 pub mod settlement_engine {

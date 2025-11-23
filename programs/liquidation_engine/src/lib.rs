@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("Liqd1111111111111111111111111111111111111111");
+declare_id!("Liqd111111111111111111111111111111111111111");
 
 #[program]
 pub mod liquidation_engine {

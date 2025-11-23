@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("Tres1111111111111111111111111111111111111111");
+declare_id!("Tres111111111111111111111111111111111111111");
 
 #[program]
 pub mod treasury_engine {

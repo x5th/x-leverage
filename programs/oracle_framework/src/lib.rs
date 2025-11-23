@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use fixed::types::I80F48;
 
-declare_id!("Orcl1111111111111111111111111111111111111111");
+declare_id!("Arcf111111111111111111111111111111111111111");
 
 #[program]
 pub mod oracle_framework {

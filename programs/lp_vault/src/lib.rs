@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("LPvt1111111111111111111111111111111111111111");
+declare_id!("LPvt111111111111111111111111111111111111111");
 
 #[program]
 pub mod lp_vault {

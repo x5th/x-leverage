@@ -1,6 +1,10 @@
 #![cfg(test)]
 
 use anchor_lang::prelude::*;
+#[allow(unused_imports)]
+use anchor_lang::AccountDeserialize;
+#[allow(unused_imports)]
+use solana_program_test::*;
 use financing_engine::{
     dynamic_liquidation_threshold, financing_amount_from_collateral, ltv_model,
     required_liquidation_gap,
