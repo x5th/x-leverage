@@ -1,0 +1,1 @@
+The prebuilt ELF/shared-object fixtures distributed with the upstream `solana_rbpf` tests have been removed to avoid committing binary artifacts. The source inputs remain in this directory for regenerating the fixtures if needed.
