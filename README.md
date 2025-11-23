@@ -27,6 +27,15 @@ Governance (XGT) orchestrates parameters, timelock, and upgrades.
 ## Client SDK
 `client/sdk.ts` exposes typed helpers for all programs with example flows for open → monitor → liquidate → settle, while `client/utils.ts` provides PDA helpers and math utilities.
 
+### Control Center UI (static preview)
+A sleek droplet-ready dashboard lives under `client/ui/`. Open `client/ui/index.html` in any browser for a static, design-forward overview of:
+- live program health snapshots (financing, liquidation, oracle, LP vault, settlement)
+- portfolio cards with LTV/health bars, APY, and per-chain context
+- settlement timeline highlights for upcoming checkpoints
+- oracle feed confidence with stale toggles and automation queue controls
+
+No build tooling is required—copy the `client/ui` folder to a droplet or serve it with your preferred static server.
+
 ## Network & Oracles
 - Default RPC target is `https://testnet.x1.xyz` (configurable via `ANCHOR_PROVIDER_URL`).
 - External price data is sourced from `http://oracle.mainnet.x1.xyz:3000/`; the SDK exposes `fetchOraclePrice` for convenience.
