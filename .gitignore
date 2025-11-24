@@ -1,0 +1,35 @@
+# Anchor
+.anchor
+target/
+**/*.rs.bk
+*.pdb
+test-ledger/
+
+# IDL (but not package.json or tsconfig.json)
+/target/**/*.json
+!package.json
+!tsconfig.json
+
+# Node
+node_modules/
+dist/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.DS_Store
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db

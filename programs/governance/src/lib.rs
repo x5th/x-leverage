@@ -25,6 +25,17 @@ pub mod governance {
 
     pub fn vote(ctx: Context<Vote>, support: bool, weight: u64) -> Result<()> {
         let proposal = &mut ctx.accounts.proposal;
+        let vote_record = &mut ctx.accounts.vote_record;
+
+        // Prevent duplicate voting
+        require!(!vote_record.has_voted, GovernanceError::AlreadyVoted);
+        require!(weight > 0, GovernanceError::InvalidWeight);
+
+        vote_record.has_voted = true;
+        vote_record.voter = ctx.accounts.voter.key();
+        vote_record.weight = weight;
+        vote_record.support = support;
+
         if support {
             proposal.for_votes = proposal.for_votes.saturating_add(weight);
         } else {
@@ -36,7 +47,11 @@ pub mod governance {
     pub fn queue_execution(ctx: Context<QueueExecution>) -> Result<()> {
         let proposal = &mut ctx.accounts.proposal;
         let clock = Clock::get()?;
-        require!(clock.unix_timestamp <= proposal.timelock_eta, GovernanceError::TooEarly);
+        require!(clock.unix_timestamp >= proposal.timelock_eta, GovernanceError::TooEarly);
+        require!(
+            proposal.for_votes > proposal.against_votes,
+            GovernanceError::QuorumNotReached
+        );
         Ok(())
     }
 
@@ -73,7 +88,17 @@ pub struct CreateProposal<'info> {
 pub struct Vote<'info> {
     #[account(mut, seeds = [b"proposal", proposal.creator.as_ref()], bump)]
     pub proposal: Account<'info, Proposal>,
+    #[account(
+        init,
+        payer = voter,
+        space = 8 + VoteRecord::LEN,
+        seeds = [b"vote", proposal.key().as_ref(), voter.key().as_ref()],
+        bump
+    )]
+    pub vote_record: Account<'info, VoteRecord>,
+    #[account(mut)]
     pub voter: Signer<'info>,
+    pub system_program: Program<'info, System>,
     /// CHECK: XGT token stub not enforced for simplicity.
     pub xgt_mint: UncheckedAccount<'info>,
 }
@@ -99,6 +124,18 @@ impl Proposal {
     pub const LEN: usize = 32 + 4 + 128 + 4 + 256 + 8 + 8 + 8 + 1;
 }
 
+#[account]
+pub struct VoteRecord {
+    pub voter: Pubkey,
+    pub has_voted: bool,
+    pub weight: u64,
+    pub support: bool,
+}
+
+impl VoteRecord {
+    pub const LEN: usize = 32 + 1 + 8 + 1;
+}
+
 #[error_code]
 pub enum GovernanceError {
     #[msg("Proposal already executed")]
@@ -107,5 +144,9 @@ pub enum GovernanceError {
     TooEarly,
     #[msg("Quorum not reached")]
     QuorumNotReached,
+    #[msg("Voter has already voted on this proposal")]
+    AlreadyVoted,
+    #[msg("Invalid vote weight")]
+    InvalidWeight,
 }
 
