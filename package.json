@@ -1,0 +1,22 @@
+{
+  "name": "x-leverage-protocol",
+  "version": "0.1.0",
+  "description": "X-Leverage Protocol - Multi-program Anchor monorepo",
+  "scripts": {
+    "build": "anchor build",
+    "test": "anchor test",
+    "deploy": "ts-node scripts/deploy.ts",
+    "airdrop": "ts-node scripts/airdrop.ts",
+    "localnet": "bash scripts/localnet-start.sh"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.32.0",
+    "@solana/web3.js": "^1.95.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4"
+  },
+  "license": "Apache-2.0"
+}
