@@ -1,4 +1,6 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
+use anchor_spl::associated_token::AssociatedToken;
 
 declare_id!("LPvt111111111111111111111111111111111111111");
 
@@ -84,10 +86,34 @@ pub mod lp_vault {
             amount <= vault.vault_usdc_balance,
             VaultError::InsufficientLiquidity
         );
+
+        // STEP 1: Transfer financed tokens from LP vault to user
+        msg!("Transferring {} financed tokens from LP vault to user", amount);
+
+        let vault_bump = ctx.bumps.vault;
+        let seeds = &[b"vault".as_ref(), &[vault_bump]];
+        let signer_seeds = &[&seeds[..]];
+
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault_token_ata.to_account_info(),
+                    to: ctx.accounts.user_financed_ata.to_account_info(),
+                    authority: vault.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            amount,
+        )?;
+        msg!("Financing transferred successfully");
+
+        // STEP 2: Update vault accounting
         let remaining = vault.vault_usdc_balance.saturating_sub(amount);
         vault.vault_usdc_balance = remaining;
         vault.locked_for_financing = vault.locked_for_financing.saturating_add(amount);
         vault.update_utilization();
+
         // Invariant: LP capital never touches user collateral ensured by isolated vault balance.
         // Invariant: no capital below active financing locked amount.
         require!(
@@ -125,7 +151,26 @@ pub struct ManageShares<'info> {
 pub struct AllocateFinancing<'info> {
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: Account<'info, LPVaultState>,
+
+    pub financed_mint: Account<'info, Mint>,
+
+    /// LP Vault's token account holding liquidity (source)
+    #[account(
+        mut,
+        constraint = vault_token_ata.mint == financed_mint.key(),
+        constraint = vault_token_ata.owner == vault.key()
+    )]
+    pub vault_token_ata: Account<'info, TokenAccount>,
+
+    /// User's token account to receive financing (destination)
+    #[account(
+        mut,
+        constraint = user_financed_ata.mint == financed_mint.key()
+    )]
+    pub user_financed_ata: Account<'info, TokenAccount>,
+
     pub authority: Signer<'info>,
+    pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]

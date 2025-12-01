@@ -1,4 +1,6 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
+use anchor_spl::associated_token::AssociatedToken;
 
 declare_id!("Fina1111111111111111111111111111111111111111");
 
@@ -25,6 +27,22 @@ pub mod financing_engine {
         require!(collateral_amount > 0, FinancingError::ZeroCollateral);
         require!(term_end > term_start, FinancingError::InvalidTerm);
 
+        // STEP 1: Transfer collateral from user to vault
+        msg!("Transferring {} tokens from user to vault", collateral_amount);
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.user_collateral_ata.to_account_info(),
+                    to: ctx.accounts.vault_collateral_ata.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            collateral_amount,
+        )?;
+        msg!("Collateral transferred successfully");
+
+        // STEP 2: Store position state
         let state = &mut ctx.accounts.state;
         state.user_pubkey = ctx.accounts.user.key();
         state.collateral_mint = ctx.accounts.collateral_mint.key();
@@ -51,6 +69,7 @@ pub mod financing_engine {
         );
 
         // Invariant: One asset per position enforced by single collateral mint.
+        msg!("Position initialized with collateral in vault custody");
         Ok(())
     }
 
@@ -100,7 +119,29 @@ pub mod financing_engine {
             state.position_status == PositionStatus::Active,
             FinancingError::InvalidStatus
         );
-        // Atomic closure: all fields transitioned in one shot.
+
+        // STEP 1: Return collateral from vault to user
+        msg!("Returning {} tokens from vault to user", state.collateral_amount);
+
+        let vault_authority_bump = ctx.bumps.vault_authority;
+        let seeds = &[b"vault_authority".as_ref(), &[vault_authority_bump]];
+        let signer_seeds = &[&seeds[..]];
+
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault_collateral_ata.to_account_info(),
+                    to: ctx.accounts.user_collateral_ata.to_account_info(),
+                    authority: ctx.accounts.vault_authority.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            state.collateral_amount,
+        )?;
+        msg!("Collateral returned successfully");
+
+        // STEP 2: Atomic closure - all fields transitioned in one shot
         state.position_status = PositionStatus::Closed;
         Ok(())
     }
@@ -154,12 +195,38 @@ pub struct InitializeFinancing<'info> {
         bump
     )]
     pub state: Account<'info, FinancingState>,
-    /// CHECK: Collateral mint is validated off-chain; single-asset enforced.
-    pub collateral_mint: UncheckedAccount<'info>,
+
+    pub collateral_mint: Account<'info, Mint>,
+
+    /// User's token account holding collateral (source)
+    #[account(
+        mut,
+        constraint = user_collateral_ata.owner == user.key(),
+        constraint = user_collateral_ata.mint == collateral_mint.key()
+    )]
+    pub user_collateral_ata: Account<'info, TokenAccount>,
+
+    /// Vault's token account to hold collateral (destination)
+    #[account(
+        mut,
+        constraint = vault_collateral_ata.mint == collateral_mint.key(),
+        constraint = vault_collateral_ata.owner == vault_authority.key()
+    )]
+    pub vault_collateral_ata: Account<'info, TokenAccount>,
+
+    /// Vault authority PDA
+    /// CHECK: PDA authority for vault token accounts
+    #[account(seeds = [b"vault_authority"], bump)]
+    pub vault_authority: UncheckedAccount<'info>,
+
     /// CHECK: Oracle accounts are informational; consistency validated in oracle framework.
     pub oracle_accounts: UncheckedAccount<'info>,
+
     #[account(mut)]
     pub user: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
@@ -204,9 +271,35 @@ pub struct CloseAtMaturity<'info> {
         bump
     )]
     pub state: Account<'info, FinancingState>,
-    /// CHECK: receiver of lamports
+
+    pub collateral_mint: Account<'info, Mint>,
+
+    /// Vault's token account holding collateral (source for return)
+    #[account(
+        mut,
+        constraint = vault_collateral_ata.mint == collateral_mint.key(),
+        constraint = vault_collateral_ata.owner == vault_authority.key()
+    )]
+    pub vault_collateral_ata: Account<'info, TokenAccount>,
+
+    /// User's token account to receive returned collateral (destination)
+    #[account(
+        mut,
+        constraint = user_collateral_ata.owner == receiver.key(),
+        constraint = user_collateral_ata.mint == collateral_mint.key()
+    )]
+    pub user_collateral_ata: Account<'info, TokenAccount>,
+
+    /// Vault authority PDA
+    /// CHECK: PDA authority for vault token accounts
+    #[account(seeds = [b"vault_authority"], bump)]
+    pub vault_authority: UncheckedAccount<'info>,
+
+    /// CHECK: receiver of lamports and collateral
     #[account(mut)]
-    pub receiver: UncheckedAccount<'info>,
+    pub receiver: Signer<'info>,
+
+    pub token_program: Program<'info, Token>,
 }
 
 #[account]

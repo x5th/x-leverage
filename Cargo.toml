@@ -18,7 +18,7 @@ license = "Apache-2.0"
 
 [workspace.dependencies]
 anchor-lang = "=0.32.0"
-anchor-spl = { version = "=0.32.0", default-features = false }
+anchor-spl = { version = "=0.32.0", features = ["token", "associated_token"] }
 anyhow = "1.0"
 bytemuck = "1.14"
 fixed = "1.24"
