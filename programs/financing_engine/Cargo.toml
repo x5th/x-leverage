@@ -13,6 +13,8 @@ bytemuck = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+lp_vault = { path = "../lp_vault", features = ["cpi"] }
+oracle_framework = { path = "../oracle_framework", features = ["cpi"] }
 
 [features]
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]

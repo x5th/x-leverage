@@ -6,12 +6,39 @@ declare_id!("Set1111111111111111111111111111111111111111");
 pub mod settlement_engine {
     use super::*;
 
+    // ========== SECURITY FIX (VULN-068): ADD AUTHORIZATION SYSTEM ==========
+    /// Initialize settlement authorization configuration
+    pub fn initialize_settlement_config(
+        ctx: Context<InitializeSettlementConfig>,
+        protocol_admin: Pubkey,
+    ) -> Result<()> {
+        let config = &mut ctx.accounts.settlement_config;
+        config.protocol_admin = protocol_admin;
+        config.authorized_settler = ctx.accounts.payer.key();
+        msg!("✅ Settlement config initialized:");
+        msg!("  Protocol admin: {}", protocol_admin);
+        msg!("  Authorized settler: {}", config.authorized_settler);
+        Ok(())
+    }
+    // ========== END SECURITY FIX (VULN-068) ==========
+
     pub fn settlement_entry(
         ctx: Context<SettlementCtx>,
         settlement_type: SettlementType,
         obligations: u64,
         collateral_value: u64,
     ) -> Result<()> {
+        // ========== SECURITY FIX (VULN-068): VALIDATE AUTHORIZATION ==========
+        let config = &ctx.accounts.settlement_config;
+        require!(
+            ctx.accounts.authority.key() == config.protocol_admin ||
+            ctx.accounts.authority.key() == config.authorized_settler ||
+            ctx.accounts.authority.key() == ctx.accounts.settlement.key(), // Settlement owner
+            SettlementError::Unauthorized
+        );
+        msg!("✅ Settlement authority validated: {}", ctx.accounts.authority.key());
+        // ========== END SECURITY FIX (VULN-068) ==========
+
         let settlement = &mut ctx.accounts.settlement;
         settlement.settlement_type = settlement_type;
         settlement.obligations = obligations;
@@ -67,12 +94,49 @@ pub mod settlement_engine {
     }
 }
 
+// ========== SECURITY FIX (VULN-068): ADD CONFIG ACCOUNT ==========
+#[derive(Accounts)]
+pub struct InitializeSettlementConfig<'info> {
+    #[account(
+        init,
+        payer = payer,
+        space = 8 + SettlementConfig::LEN,
+        seeds = [b"settlement_config"],
+        bump
+    )]
+    pub settlement_config: Account<'info, SettlementConfig>,
+
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+// ========== END SECURITY FIX (VULN-068) ==========
+
 #[derive(Accounts)]
 pub struct SettlementCtx<'info> {
     #[account(mut, seeds = [b"settlement", authority.key().as_ref()], bump)]
     pub settlement: Account<'info, SettlementState>,
+
+    // ========== SECURITY FIX (VULN-068): REQUIRE CONFIG FOR AUTHORIZATION ==========
+    #[account(seeds = [b"settlement_config"], bump)]
+    pub settlement_config: Account<'info, SettlementConfig>,
+    // ========== END SECURITY FIX (VULN-068) ==========
+
     pub authority: Signer<'info>,
 }
+
+// ========== SECURITY FIX (VULN-068): ADD SETTLEMENT CONFIG ==========
+#[account]
+pub struct SettlementConfig {
+    pub protocol_admin: Pubkey,
+    pub authorized_settler: Pubkey,
+}
+
+impl SettlementConfig {
+    pub const LEN: usize = 32 + 32;
+}
+// ========== END SECURITY FIX (VULN-068) ==========
 
 #[account]
 pub struct SettlementState {
@@ -104,5 +168,7 @@ pub enum SettlementError {
     MathOverflow,
     #[msg("Invalid settlement state")]
     InvalidSettlement,
+    #[msg("Unauthorized: only protocol admin, authorized settler, or settlement owner can settle")]
+    Unauthorized,  // SECURITY FIX (VULN-068)
 }
 

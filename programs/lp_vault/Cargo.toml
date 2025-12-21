@@ -12,5 +12,8 @@ anchor-spl = { workspace = true }
 thiserror = { workspace = true }
 
 [features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 

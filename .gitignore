@@ -33,3 +33,11 @@ pnpm-debug.log*
 
 # OS
 Thumbs.db
+
+# Claude Code Configuration
+# Keep .claude/ directory tracked - contains important build instructions
+
+# GitHub token backups (NEVER commit these)
+.github_token_backup
+*_token_backup
+GITHUB_ACCESS_RECOVERY.sh

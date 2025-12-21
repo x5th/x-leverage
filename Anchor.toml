@@ -1,12 +1,24 @@
+[toolchain]
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs."https://rpc.testnet.x1.xyz"]
+wrapping_vault = "8criri7uvtARSwA6GpNSbQjxfAsGAx5raVUQSg2aHcS9"
+
+[programs.testnet]
+financing_engine = "Fina1111111111111111111111111111111111111111"
+governance = "Govr1111111111111111111111111111111111111111"
+liquidation_engine = "Liqd111111111111111111111111111111111111111"
+lp_vault = "LPvt111111111111111111111111111111111111111"
+oracle_framework = "Arcf111111111111111111111111111111111111111"
+settlement_engine = "Set1111111111111111111111111111111111111111"
+treasury_engine = "Tres111111111111111111111111111111111111111"
+
+[registry]
+url = "https://api.apr.dev"
+
 [provider]
 cluster = "https://rpc.testnet.x1.xyz"
 wallet = "~/.config/solana/id.json"
-
-[programs.testnet]
-financing_engine     = "Fina1111111111111111111111111111111111111111"
-liquidation_engine   = "Liqd111111111111111111111111111111111111111"
-lp_vault             = "LPvt111111111111111111111111111111111111111"
-treasury_engine      = "Tres111111111111111111111111111111111111111"
-oracle_framework     = "Arcf111111111111111111111111111111111111111"
-governance           = "Govr1111111111111111111111111111111111111111"
-settlement_engine    = "Set1111111111111111111111111111111111111111"

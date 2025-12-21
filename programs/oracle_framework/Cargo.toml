@@ -11,3 +11,9 @@ anchor-lang = { workspace = true }
 thiserror = { workspace = true }
 fixed = { workspace = true }
 
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+idl-build = ["anchor-lang/idl-build"]
+

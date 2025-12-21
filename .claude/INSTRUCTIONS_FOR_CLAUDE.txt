@@ -1,0 +1,22 @@
+================================================================================
+CRITICAL INSTRUCTIONS FOR CLAUDE CODE
+================================================================================
+
+When building this project, you MUST use the correct Solana toolchain.
+
+ALWAYS use this command pattern for builds:
+  export PATH="$HOME/.local/share/solana-release/bin:$HOME/.cargo/bin:$PATH" && anchor build
+
+OR use the build wrapper script:
+  ./build.sh
+
+DO NOT use bare "anchor build" or "cargo build" commands without setting PATH.
+
+If you see dependency errors like "requires rustc 1.76" or "toml_edit" issues:
+  1. Run: git checkout Cargo.lock
+  2. Build with correct PATH (see above)
+
+Read .claude/build-config.md for full details.
+
+This is not optional - wrong toolchain = build failure.
+================================================================================
