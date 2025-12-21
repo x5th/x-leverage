@@ -97,6 +97,15 @@ pub mod oracle_framework {
     /// Uses elapsed time since last update to weight the contribution of each price
     pub fn calculate_twap(ctx: Context<OracleCtx>, window: u64) -> Result<()> {
         let oracle = &mut ctx.accounts.oracle;
+
+        // ========== SECURITY FIX: RESTRICT TWAP UPDATES TO ORACLE AUTHORITY ==========
+        require!(
+            ctx.accounts.authority.key() == oracle.protocol_admin,
+            OracleError::Unauthorized
+        );
+        msg!("✅ Authority validated for TWAP calculation: {}", ctx.accounts.authority.key());
+        // ========== END SECURITY FIX ==========
+
         let clock = Clock::get()?;
 
         // Time-weighted calculation: weight newer prices based on time elapsed

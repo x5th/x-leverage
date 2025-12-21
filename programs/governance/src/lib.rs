@@ -335,8 +335,14 @@ pub struct InitializeGovernance<'info> {
 
 #[derive(Accounts)]
 pub struct Vote<'info> {
-    #[account(mut, seeds = [b"proposal", proposal.creator.as_ref()], bump)]
+    // ========== SECURITY FIX: MATCH NONCE-BASED SEEDS FROM CREATEPROPOSAL ==========
+    #[account(
+        mut,
+        seeds = [b"proposal", proposal.creator.as_ref(), &proposal.nonce.to_le_bytes()],
+        bump
+    )]
     pub proposal: Account<'info, Proposal>,
+    // ========== END SECURITY FIX ==========
 
     #[account(
         init,
@@ -369,8 +375,14 @@ pub struct Vote<'info> {
 
 #[derive(Accounts)]
 pub struct QueueExecution<'info> {
-    #[account(mut, seeds = [b"proposal", proposal.creator.as_ref()], bump)]
+    // ========== SECURITY FIX: MATCH NONCE-BASED SEEDS FROM CREATEPROPOSAL ==========
+    #[account(
+        mut,
+        seeds = [b"proposal", proposal.creator.as_ref(), &proposal.nonce.to_le_bytes()],
+        bump
+    )]
     pub proposal: Account<'info, Proposal>,
+    // ========== END SECURITY FIX ==========
 
     #[account(seeds = [b"governance_config"], bump)]
     pub governance_config: Account<'info, GovernanceConfig>,
@@ -378,8 +390,14 @@ pub struct QueueExecution<'info> {
 
 #[derive(Accounts)]
 pub struct ExecuteProposal<'info> {
-    #[account(mut, seeds = [b"proposal", proposal.creator.as_ref()], bump)]
+    // ========== SECURITY FIX: MATCH NONCE-BASED SEEDS FROM CREATEPROPOSAL ==========
+    #[account(
+        mut,
+        seeds = [b"proposal", proposal.creator.as_ref(), &proposal.nonce.to_le_bytes()],
+        bump
+    )]
     pub proposal: Account<'info, Proposal>,
+    // ========== END SECURITY FIX ==========
 
     #[account(seeds = [b"governance_config"], bump)]
     pub governance_config: Account<'info, GovernanceConfig>,
