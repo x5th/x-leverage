@@ -5,6 +5,7 @@
   "scripts": {
     "build": "anchor build",
     "test": "anchor test",
+    "test:security": "anchor test tests/security_tests.ts",
     "deploy": "ts-node scripts/deploy.ts",
     "airdrop": "ts-node scripts/airdrop.ts",
     "localnet": "bash scripts/localnet-start.sh"
@@ -14,7 +15,14 @@
     "@solana/web3.js": "^1.95.8"
   },
   "devDependencies": {
+    "@solana/spl-token": "^0.4.14",
+    "@types/bs58": "^5.0.0",
+    "@types/chai": "^4.3.11",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^22.0.0",
+    "@types/node-fetch": "^2.6.13",
+    "chai": "^4.3.10",
+    "mocha": "^10.2.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.5.4"
   },
