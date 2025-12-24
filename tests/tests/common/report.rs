@@ -1,0 +1,35 @@
+#[derive(Debug, Clone, Copy)]
+pub struct VulnCheck {
+    pub id: &'static str,
+    pub description: &'static str,
+}
+
+pub const VULN_CHECKS: &[VulnCheck] = &[
+    VulnCheck { id: "VULN-001", description: "Admin-only liquidation path" },
+    VulnCheck { id: "VULN-002", description: "Oracle authorization on LTV updates" },
+    VulnCheck { id: "VULN-003", description: "LTV ordering checks" },
+    VulnCheck { id: "VULN-004", description: "Oracle price validation" },
+    VulnCheck { id: "VULN-005", description: "Bad debt write-off authorization" },
+    VulnCheck { id: "VULN-006", description: "Debt repayment before maturity close" },
+    VulnCheck { id: "VULN-007", description: "Minimum position size" },
+    VulnCheck { id: "VULN-009", description: "Early close fee" },
+    VulnCheck { id: "VULN-010", description: "Oracle source validation" },
+    VulnCheck { id: "VULN-011", description: "Position limit per user" },
+    VulnCheck { id: "VULN-020", description: "Circuit breaker checks" },
+    VulnCheck { id: "VULN-051", description: "Oracle snapshot authorization" },
+    VulnCheck { id: "VULN-052", description: "Global oracle singleton" },
+    VulnCheck { id: "VULN-053", description: "TWAP authorization" },
+    VulnCheck { id: "VULN-054", description: "Stale price protection" },
+    VulnCheck { id: "VULN-055", description: "Overflow protection" },
+    VulnCheck { id: "VULN-057", description: "Vote weight from XGT balance" },
+    VulnCheck { id: "VULN-058", description: "Quorum enforcement" },
+    VulnCheck { id: "VULN-059", description: "Execution authorization" },
+    VulnCheck { id: "VULN-060", description: "Proposal nonce fix" },
+    VulnCheck { id: "VULN-061", description: "Timelock delay minimum" },
+    VulnCheck { id: "VULN-063", description: "Authorized liquidator validation" },
+    VulnCheck { id: "VULN-064", description: "Snapshot expiration" },
+    VulnCheck { id: "VULN-065", description: "State reset after liquidation" },
+    VulnCheck { id: "VULN-072", description: "Treasury allocation authorization" },
+    VulnCheck { id: "VULN-073", description: "Co-financing limits" },
+    VulnCheck { id: "VULN-074", description: "Compounding limits" },
+];
