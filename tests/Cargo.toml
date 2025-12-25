@@ -8,8 +8,12 @@ anchor-lang = { workspace = true }
 anchor-spl = { workspace = true }
 solana-program-test = { workspace = true }
 solana-sdk = { workspace = true }
+solana-program = { workspace = true }
+solana-program-option = { workspace = true }
+solana-program-pack = { workspace = true }
 anyhow = { workspace = true }
 serde = { workspace = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 financing_engine = { path = "../programs/financing_engine" }
 lp_vault = { path = "../programs/lp_vault" }
 oracle_framework = { path = "../programs/oracle_framework" }
