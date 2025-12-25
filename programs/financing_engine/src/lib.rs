@@ -320,6 +320,13 @@ pub mod financing_engine {
         // ========== END CIRCUIT BREAKER CHECK ==========
 
         let state = &mut ctx.accounts.state;
+        // ========== SECURITY FIX (VULN-007): AUTHORIZED CLOSURE ONLY ==========
+        require_keys_eq!(
+            state.user_pubkey,
+            ctx.accounts.receiver.key(),
+            FinancingError::Unauthorized
+        );
+        // ========== END SECURITY FIX (VULN-007) ==========
         let clock = Clock::get()?;
         require!(clock.unix_timestamp >= state.term_end, FinancingError::NotMatured);
         require!(
@@ -333,6 +340,12 @@ pub mod financing_engine {
         msg!("Repaying {} financing tokens + {} fees to LP vault",
              state.financing_amount, state.fee_schedule);
 
+        let total_repayment = state.financing_amount.saturating_add(state.fee_schedule);
+        require!(
+            ctx.accounts.user_financed_ata.amount >= total_repayment,
+            FinancingError::InsufficientBalanceForClosure
+        );
+
         let cpi_program = ctx.accounts.lp_vault_program.to_account_info();
         let cpi_accounts = ReleaseFinancing {
             vault: ctx.accounts.lp_vault.to_account_info(),
@@ -345,7 +358,6 @@ pub mod financing_engine {
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
 
         // Repay financing amount + fees
-        let total_repayment = state.financing_amount.saturating_add(state.fee_schedule);
         lp_vault::cpi::release_financing(cpi_ctx, total_repayment)?;
         msg!("✅ Debt repaid to LP vault");
 
@@ -404,6 +416,13 @@ pub mod financing_engine {
         // ========== END CIRCUIT BREAKER CHECK ==========
 
         let state = &mut ctx.accounts.state;
+        // ========== SECURITY FIX (VULN-007): AUTHORIZED CLOSURE ONLY ==========
+        require_keys_eq!(
+            state.user_pubkey,
+            ctx.accounts.receiver.key(),
+            FinancingError::Unauthorized
+        );
+        // ========== END SECURITY FIX (VULN-007) ==========
         let clock = Clock::get()?;
 
         // Early closure is allowed BEFORE maturity

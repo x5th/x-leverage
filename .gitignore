@@ -158,6 +158,3 @@ rust-toolchain.toml.bak
 rust-toolchain.toml.disabled
 solana-install
 solana-install.sh
-
-# Incomplete program implementations
-programs/wrapping_vault/src/
