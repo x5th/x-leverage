@@ -16,6 +16,10 @@ serde = { workspace = true }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 financing_engine = { path = "../programs/financing_engine" }
 lp_vault = { path = "../programs/lp_vault" }
+oracle_framework = { path = "../programs/oracle_framework" }
+governance = { path = "../programs/governance" }
+liquidation_engine = { path = "../programs/liquidation_engine" }
+treasury_engine = { path = "../programs/treasury_engine" }
 
 [lib]
 path = "src/lib.rs"
@@ -25,9 +29,25 @@ name = "financing_engine_tests"
 harness = true
 
 [[test]]
+name = "lp_vault_tests"
+harness = true
+
+[[test]]
 name = "integration_tests"
 harness = true
 
 [[test]]
-name = "lp_vault_tests"
+name = "oracle_framework_tests"
+harness = true
+
+[[test]]
+name = "governance_tests"
+harness = true
+
+[[test]]
+name = "liquidation_engine_tests"
+harness = true
+
+[[test]]
+name = "treasury_engine_tests"
 harness = true

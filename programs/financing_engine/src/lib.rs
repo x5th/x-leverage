@@ -1067,9 +1067,14 @@ pub struct CloseAtMaturity<'info> {
     #[account(seeds = [b"vault_authority"], bump)]
     pub vault_authority: UncheckedAccount<'info>,
 
-    /// CHECK: receiver of lamports and collateral
-    #[account(mut)]
+    // ========== SECURITY FIX (VULN-007): AUTHORIZATION CHECK ==========
+    /// Receiver must be the position owner to prevent collateral theft
+    #[account(
+        mut,
+        constraint = receiver.key() == state.user_pubkey @ FinancingError::Unauthorized
+    )]
     pub receiver: Signer<'info>,
+    // ========== END SECURITY FIX ==========
 
     // ===== SECURITY FIX (VULN-011): POSITION COUNTER FOR DECREMENT =====
     #[account(
@@ -1146,9 +1151,14 @@ pub struct CloseEarly<'info> {
     #[account(seeds = [b"vault_authority"], bump)]
     pub vault_authority: UncheckedAccount<'info>,
 
-    /// CHECK: receiver of lamports and collateral
-    #[account(mut)]
+    // ========== SECURITY FIX (VULN-007): AUTHORIZATION CHECK ==========
+    /// Receiver must be the position owner to prevent collateral theft
+    #[account(
+        mut,
+        constraint = receiver.key() == state.user_pubkey @ FinancingError::Unauthorized
+    )]
     pub receiver: Signer<'info>,
+    // ========== END SECURITY FIX ==========
 
     // ===== SECURITY FIX (VULN-011): POSITION COUNTER FOR DECREMENT =====
     #[account(
