@@ -291,6 +291,7 @@ dependencies = [
  "anchor-lang",
  "spl-associated-token-account",
  "spl-token",
+ "spl-token-2022",
 ]
 
 [[package]]
@@ -8614,7 +8615,10 @@ dependencies = [
  "anchor-spl",
  "anyhow",
  "financing_engine",
+ "governance",
+ "liquidation_engine",
  "lp_vault",
+ "oracle_framework",
  "serde",
  "solana-program",
  "solana-program-option",
@@ -8622,6 +8626,7 @@ dependencies = [
  "solana-program-test",
  "solana-sdk",
  "tokio",
+ "treasury_engine",
 ]
 
 [[package]]
