@@ -39,5 +39,6 @@ overflow-checks = true
 
 [patch.crates-io]
 solana_rbpf = { path = "vendor/solana_rbpf" }
+# Anchor 0.32 expects Solana helper APIs not present in the published 2.2.1 crates.
 solana-account-info = { path = "vendor/solana-account-info" }
 solana-instructions-sysvar = { path = "vendor/solana-instructions-sysvar" }

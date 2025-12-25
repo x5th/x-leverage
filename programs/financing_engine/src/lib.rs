@@ -340,6 +340,12 @@ pub mod financing_engine {
         msg!("Repaying {} financing tokens + {} fees to LP vault",
              state.financing_amount, state.fee_schedule);
 
+        let total_repayment = state.financing_amount.saturating_add(state.fee_schedule);
+        require!(
+            ctx.accounts.user_financed_ata.amount >= total_repayment,
+            FinancingError::InsufficientBalanceForClosure
+        );
+
         let cpi_program = ctx.accounts.lp_vault_program.to_account_info();
         let cpi_accounts = ReleaseFinancing {
             vault: ctx.accounts.lp_vault.to_account_info(),
@@ -352,7 +358,6 @@ pub mod financing_engine {
         let cpi_ctx = CpiContext::new(cpi_program, cpi_accounts);
 
         // Repay financing amount + fees
-        let total_repayment = state.financing_amount.saturating_add(state.fee_schedule);
         lp_vault::cpi::release_financing(cpi_ctx, total_repayment)?;
         msg!("✅ Debt repaid to LP vault");
 

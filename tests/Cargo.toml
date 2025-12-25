@@ -33,6 +33,10 @@ name = "lp_vault_tests"
 harness = true
 
 [[test]]
+name = "integration_tests"
+harness = true
+
+[[test]]
 name = "oracle_framework_tests"
 harness = true
 
@@ -46,8 +50,4 @@ harness = true
 
 [[test]]
 name = "treasury_engine_tests"
-harness = true
-
-[[test]]
-name = "integration_tests"
 harness = true
