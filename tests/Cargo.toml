@@ -4,20 +4,30 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# Program dependencies removed due to Anchor entrypoint conflicts in tests
-# For testing, use `anchor test` command instead
-# anchor-lang = { workspace = true }
-# solana-program-test = { workspace = true }
-# solana-sdk = { workspace = true }
-# anyhow = { workspace = true }
-# serde = { workspace = true }
+anchor-lang = { workspace = true }
+anchor-spl = { workspace = true }
+solana-program-test = { workspace = true }
+solana-sdk = { workspace = true }
+solana-program = { workspace = true }
+solana-program-option = { workspace = true }
+solana-program-pack = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+financing_engine = { path = "../programs/financing_engine" }
+lp_vault = { path = "../programs/lp_vault" }
 
 [lib]
 path = "src/lib.rs"
 
-# Integration tests disabled due to Anchor entrypoint conflicts
-# Uncomment and implement properly using solana-program-test when ready
-# [[test]]
-# name = "integration"
-# harness = true
+[[test]]
+name = "financing_engine_tests"
+harness = true
 
+[[test]]
+name = "integration_tests"
+harness = true
+
+[[test]]
+name = "lp_vault_tests"
+harness = true
