@@ -38,11 +38,13 @@ pub mod lp_vault {
         Ok(())
     }
 
-
-    // DEPRECATED: Deposit/withdraw functions temporarily disabled
-    // Use allocate_financing/release_financing for position management
-    /* pub fn deposit_usdc(ctx: Context<DepositUsdc>, amount: u64) -> Result<()> {
+    pub fn deposit_usdc(ctx: Context<DepositUsdc>, amount: u64) -> Result<()> {
         let vault = &mut ctx.accounts.vault;
+
+        // ========== CIRCUIT BREAKER CHECK (VULN-020) ==========
+        require!(!vault.paused, VaultError::VaultPaused);
+        // ========== END CIRCUIT BREAKER CHECK ==========
+
         require!(amount > 0, VaultError::ZeroAmount);
         let pre_shares = vault.total_shares;
         let pre_price = vault.share_price();
@@ -67,7 +69,21 @@ pub mod lp_vault {
             shares
         };
 
-        // Mint LP tokens to user
+        // STEP 1: Transfer USDC from user to vault
+        msg!("Transferring {} USDC from user to vault", amount);
+        token::transfer(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.user_usdc_account.to_account_info(),
+                    to: ctx.accounts.vault_usdc_account.to_account_info(),
+                    authority: ctx.accounts.user.to_account_info(),
+                },
+            ),
+            amount,
+        )?;
+
+        // STEP 2: Mint LP tokens to user
         let vault_bump = ctx.bumps.vault;
         let seeds = &[b"vault".as_ref(), &[vault_bump]];
         let signer_seeds = &[&seeds[..]];
@@ -97,17 +113,38 @@ pub mod lp_vault {
         vault.update_utilization();
 
         msg!("Deposited {} USDC, minted {} LP tokens", amount, shares);
-        Ok(())
-    } */
 
-    /* pub fn withdraw_usdc(ctx: Context<WithdrawUsdc>, shares: u64) -> Result<()> {
+        // Emit event for monitoring
+        let clock = Clock::get()?;
+        emit!(LPDeposited {
+            user: ctx.accounts.user.key(),
+            amount,
+            shares,
+            total_shares: vault.total_shares,
+            vault_balance: vault.vault_usdc_balance,
+            timestamp: clock.unix_timestamp,
+        });
+
+        Ok(())
+    }
+
+    pub fn withdraw_usdc(ctx: Context<WithdrawUsdc>, shares: u64) -> Result<()> {
         let vault = &mut ctx.accounts.vault;
+
+        // ========== CIRCUIT BREAKER CHECK (VULN-020) ==========
+        require!(!vault.paused, VaultError::VaultPaused);
+        // ========== END CIRCUIT BREAKER CHECK ==========
+
         require!(shares > 0, VaultError::ZeroAmount);
         require!(shares <= vault.total_shares, VaultError::InsufficientShares);
 
         let amount = vault.redeem_amount(shares)?;
 
-        // Burn LP tokens from user
+        // Check that vault has enough available liquidity (not locked for financing)
+        let available = vault.vault_usdc_balance.saturating_sub(vault.locked_for_financing);
+        require!(amount <= available, VaultError::InsufficientLiquidity);
+
+        // STEP 1: Burn LP tokens from user
         token::burn(
             CpiContext::new(
                 ctx.accounts.token_program.to_account_info(),
@@ -120,6 +157,25 @@ pub mod lp_vault {
             shares,
         )?;
 
+        // STEP 2: Transfer USDC from vault to user
+        msg!("Transferring {} USDC from vault to user", amount);
+        let vault_bump = ctx.bumps.vault;
+        let seeds = &[b"vault".as_ref(), &[vault_bump]];
+        let signer_seeds = &[&seeds[..]];
+
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.vault_usdc_account.to_account_info(),
+                    to: ctx.accounts.user_usdc_account.to_account_info(),
+                    authority: vault.to_account_info(),
+                },
+                signer_seeds,
+            ),
+            amount,
+        )?;
+
         vault.total_shares = vault.total_shares.saturating_sub(shares);
         vault.vault_usdc_balance = vault.vault_usdc_balance.saturating_sub(amount);
         let post_price = vault.share_price();
@@ -128,8 +184,20 @@ pub mod lp_vault {
         vault.update_utilization();
 
         msg!("Burned {} LP tokens, withdrew {} USDC", shares, amount);
+
+        // Emit event for monitoring
+        let clock = Clock::get()?;
+        emit!(LPWithdrawn {
+            user: ctx.accounts.user.key(),
+            shares,
+            amount,
+            total_shares: vault.total_shares,
+            vault_balance: vault.vault_usdc_balance,
+            timestamp: clock.unix_timestamp,
+        });
+
         Ok(())
-    } */
+    }
 
     pub fn mint_shares(ctx: Context<ManageShares>, amount: u64) -> Result<()> {
         let vault = &mut ctx.accounts.vault;
@@ -344,6 +412,32 @@ pub struct DepositUsdc<'info> {
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: Account<'info, LPVaultState>,
 
+    /// LP token mint (vault is mint authority)
+    #[account(mut)]
+    pub lp_token_mint: Account<'info, Mint>,
+
+    /// User's LP token account (destination for minted LP tokens)
+    #[account(
+        mut,
+        constraint = user_lp_token_account.mint == lp_token_mint.key(),
+        constraint = user_lp_token_account.owner == user.key()
+    )]
+    pub user_lp_token_account: Account<'info, TokenAccount>,
+
+    /// User's USDC account (source of USDC deposit)
+    #[account(
+        mut,
+        constraint = user_usdc_account.owner == user.key()
+    )]
+    pub user_usdc_account: Account<'info, TokenAccount>,
+
+    /// Vault's USDC account (destination for USDC deposit)
+    #[account(
+        mut,
+        constraint = vault_usdc_account.owner == vault.key()
+    )]
+    pub vault_usdc_account: Account<'info, TokenAccount>,
+
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
 }
@@ -352,6 +446,32 @@ pub struct DepositUsdc<'info> {
 pub struct WithdrawUsdc<'info> {
     #[account(mut, seeds = [b"vault"], bump)]
     pub vault: Account<'info, LPVaultState>,
+
+    /// LP token mint (vault burns from user)
+    #[account(mut)]
+    pub lp_token_mint: Account<'info, Mint>,
+
+    /// User's LP token account (source of LP tokens to burn)
+    #[account(
+        mut,
+        constraint = user_lp_token_account.mint == lp_token_mint.key(),
+        constraint = user_lp_token_account.owner == user.key()
+    )]
+    pub user_lp_token_account: Account<'info, TokenAccount>,
+
+    /// User's USDC account (destination for USDC withdrawal)
+    #[account(
+        mut,
+        constraint = user_usdc_account.owner == user.key()
+    )]
+    pub user_usdc_account: Account<'info, TokenAccount>,
+
+    /// Vault's USDC account (source of USDC withdrawal)
+    #[account(
+        mut,
+        constraint = vault_usdc_account.owner == vault.key()
+    )]
+    pub vault_usdc_account: Account<'info, TokenAccount>,
 
     pub user: Signer<'info>,
     pub token_program: Program<'info, Token>,
@@ -581,6 +701,26 @@ pub struct VaultPaused {
 #[event]
 pub struct VaultUnpaused {
     pub admin: Pubkey,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct LPDeposited {
+    pub user: Pubkey,
+    pub amount: u64,
+    pub shares: u64,
+    pub total_shares: u64,
+    pub vault_balance: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct LPWithdrawn {
+    pub user: Pubkey,
+    pub shares: u64,
+    pub amount: u64,
+    pub total_shares: u64,
+    pub vault_balance: u64,
     pub timestamp: i64,
 }
 // ========== END EVENT DEFINITIONS ==========
