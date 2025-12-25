@@ -320,6 +320,13 @@ pub mod financing_engine {
         // ========== END CIRCUIT BREAKER CHECK ==========
 
         let state = &mut ctx.accounts.state;
+        // ========== SECURITY FIX (VULN-007): AUTHORIZED CLOSURE ONLY ==========
+        require_keys_eq!(
+            state.user_pubkey,
+            ctx.accounts.receiver.key(),
+            FinancingError::Unauthorized
+        );
+        // ========== END SECURITY FIX (VULN-007) ==========
         let clock = Clock::get()?;
         require!(clock.unix_timestamp >= state.term_end, FinancingError::NotMatured);
         require!(
@@ -404,6 +411,13 @@ pub mod financing_engine {
         // ========== END CIRCUIT BREAKER CHECK ==========
 
         let state = &mut ctx.accounts.state;
+        // ========== SECURITY FIX (VULN-007): AUTHORIZED CLOSURE ONLY ==========
+        require_keys_eq!(
+            state.user_pubkey,
+            ctx.accounts.receiver.key(),
+            FinancingError::Unauthorized
+        );
+        // ========== END SECURITY FIX (VULN-007) ==========
         let clock = Clock::get()?;
 
         // Early closure is allowed BEFORE maturity
