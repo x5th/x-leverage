@@ -13,10 +13,10 @@ async function main() {
 
     // Load IDL
     const idl = JSON.parse(fs.readFileSync('./target/idl/financing_engine.json', 'utf8'));
-    const programId = new PublicKey('7PSunTw68XzNT8hEM5KkRL66MWqjWy21hAFHfsipp7gw');
+    const programId = new PublicKey('2VmBchqNd9gv5g1f9d4bkuJ23yPaEfThGKJ7k3QjbgVr'); // Correct financing engine program ID
 
     // Create program interface
-    const program = new anchor.Program(idl as anchor.Idl, provider);
+    const program = new anchor.Program(idl as anchor.Idl, programId, provider);
 
     // Derive protocol_config PDA
     const [protocolConfig, bump] = PublicKey.findProgramAddressSync(
