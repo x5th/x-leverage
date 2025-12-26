@@ -60,6 +60,19 @@ fn add_liquidation_authority(
     authority_pda
 }
 
+fn add_funded_system_account(program_test: &mut ProgramTest, address: Pubkey) {
+    program_test.add_account(
+        address,
+        Account {
+            lamports: 1_000_000,
+            data: vec![],
+            owner: system_program::id(),
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+}
+
 #[tokio::test]
 async fn test_snapshot_expiration() {
     let mut program_test = ProgramTest::new(
@@ -79,16 +92,7 @@ async fn test_snapshot_expiration() {
         0,
         false,
     );
-    program_test.add_account(
-        oracle_feed,
-        Account {
-            lamports: 1_000_000,
-            data: vec![],
-            owner: system_program::id(),
-            executable: false,
-            rent_epoch: 0,
-        },
-    );
+    add_funded_system_account(&mut program_test, oracle_feed);
 
     let mut context = program_test.start_with_context().await;
 
@@ -191,26 +195,8 @@ async fn test_delegated_liquidator_validation() {
         1_000,
         false,
     );
-    program_test.add_account(
-        unauthorized.pubkey(),
-        Account {
-            lamports: 1_000_000,
-            data: vec![],
-            owner: system_program::id(),
-            executable: false,
-            rent_epoch: 0,
-        },
-    );
-    program_test.add_account(
-        dex_router,
-        Account {
-            lamports: 1_000_000,
-            data: vec![],
-            owner: system_program::id(),
-            executable: false,
-            rent_epoch: 0,
-        },
-    );
+    add_funded_system_account(&mut program_test, unauthorized.pubkey());
+    add_funded_system_account(&mut program_test, dex_router);
 
     let context = program_test.start_with_context().await;
     let accounts = liquidation_engine::accounts::ExecuteLiquidation {
@@ -330,28 +316,9 @@ async fn test_slippage_limits() {
         0,
         false,
     );
-    for account in [oracle_feed, dex_router] {
-        program_test.add_account(
-            account,
-            Account {
-                lamports: 1_000_000,
-                data: vec![],
-                owner: system_program::id(),
-                executable: false,
-                rent_epoch: 0,
-            },
-        );
+    for account in [oracle_feed, dex_router, delegated_liquidator.pubkey()] {
+        add_funded_system_account(&mut program_test, account);
     }
-    program_test.add_account(
-        delegated_liquidator.pubkey(),
-        Account {
-            lamports: 1_000_000,
-            data: vec![],
-            owner: system_program::id(),
-            executable: false,
-            rent_epoch: 0,
-        },
-    );
 
     let mut context = program_test.start_with_context().await;
     let freeze_accounts = liquidation_engine::accounts::FreezeOracleSnapshot {
