@@ -48,7 +48,11 @@ fn lp_vault_processor<'a, 'b, 'c, 'd>(
 }
 
 fn setup_program_test() -> ProgramTest {
-    let mut program_test = setup_program_test();
+    let mut program_test = ProgramTest::new(
+        "financing_engine",
+        financing_engine::id(),
+        solana_program_test::processor!(financing_engine_processor),
+    );
     program_test.add_program(
         "lp_vault",
         lp_vault::id(),
