@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-declare_id!("Wrap111111111111111111111111111111111111111");
+declare_id!("8criri7uvtARSwA6GpNSbQjxfAsGAx5raVUQSg2aHcS9");
 
 #[program]
 pub mod wrapping_vault {
