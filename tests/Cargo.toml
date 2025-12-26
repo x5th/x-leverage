@@ -20,6 +20,7 @@ oracle_framework = { path = "../programs/oracle_framework" }
 governance = { path = "../programs/governance" }
 liquidation_engine = { path = "../programs/liquidation_engine" }
 treasury_engine = { path = "../programs/treasury_engine" }
+settlement_engine = { path = "../programs/settlement_engine" }
 
 [lib]
 path = "src/lib.rs"
