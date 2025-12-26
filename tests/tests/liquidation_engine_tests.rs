@@ -192,6 +192,16 @@ async fn test_delegated_liquidator_validation() {
         false,
     );
     program_test.add_account(
+        unauthorized.pubkey(),
+        Account {
+            lamports: 1_000_000,
+            data: vec![],
+            owner: system_program::id(),
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
+    program_test.add_account(
         dex_router,
         Account {
             lamports: 1_000_000,
@@ -332,6 +342,16 @@ async fn test_slippage_limits() {
             },
         );
     }
+    program_test.add_account(
+        delegated_liquidator.pubkey(),
+        Account {
+            lamports: 1_000_000,
+            data: vec![],
+            owner: system_program::id(),
+            executable: false,
+            rent_epoch: 0,
+        },
+    );
 
     let mut context = program_test.start_with_context().await;
     let freeze_accounts = liquidation_engine::accounts::FreezeOracleSnapshot {
