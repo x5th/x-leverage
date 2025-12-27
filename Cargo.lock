@@ -8621,6 +8621,7 @@ dependencies = [
  "lp_vault",
  "oracle_framework",
  "serde",
+ "settlement_engine",
  "solana-program",
  "solana-program-option",
  "solana-program-pack",

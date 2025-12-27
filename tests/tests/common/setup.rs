@@ -259,9 +259,9 @@ pub fn sample_user_keypair() -> Keypair {
     deterministic_keypair(2)
 }
 
-pub fn financing_state_pda(user: Pubkey, collateral_mint: Pubkey) -> (Pubkey, u8) {
+pub fn financing_state_pda(user: Pubkey, position_index: u64) -> (Pubkey, u8) {
     Pubkey::find_program_address(
-        &[b"financing", user.as_ref(), collateral_mint.as_ref()],
+        &[b"financing", user.as_ref(), &position_index.to_le_bytes()],
         &financing_engine::id(),
     )
 }
