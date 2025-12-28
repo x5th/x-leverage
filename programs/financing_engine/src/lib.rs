@@ -1490,7 +1490,8 @@ pub struct CloseAtMaturity<'info> {
     /// Protocol treasury USDC account (destination for deferred payment)
     #[account(
         mut,
-        constraint = protocol_usdc_ata.mint == usdc_mint.key()
+        constraint = protocol_usdc_ata.mint == usdc_mint.key(),
+        constraint = protocol_usdc_ata.owner == vault_authority.key()
     )]
     pub protocol_usdc_ata: Account<'info, TokenAccount>,
 
