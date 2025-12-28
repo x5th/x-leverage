@@ -281,7 +281,7 @@ pub mod financing_engine {
 
         // ========== SECURITY FIX: INITIALIZE NEW SECURITY FIELDS ==========
         state.is_being_liquidated = false;
-        state.last_collateral_price = collateral_usd_value;
+        state.last_collateral_price = collateral_price_per_token(collateral_usd_value, collateral_amount)?;
         state.last_price_update_slot = Clock::get()?.slot;
         msg!("✅ Security fields initialized: price tracking and reentrancy guard enabled");
         // ========== END SECURITY FIELD INITIALIZATION ==========
@@ -388,17 +388,18 @@ pub mod financing_engine {
         // ========== END SECURITY FIX ==========
 
         // ========== SECURITY FIX (CRITICAL-04): PRICE DEVIATION CHECK ==========
-        // Check for large price changes (>10%) to prevent manipulation
+        // Check for large per-token price changes (>10%) to prevent manipulation
+        let new_price_per_token = collateral_price_per_token(collateral_usd_value, state.collateral_amount)?;
         let previous_price = state.last_collateral_price;
         if previous_price > 0 {
-            let price_change_pct = if collateral_usd_value > previous_price {
-                (collateral_usd_value - previous_price)
+            let price_change_pct = if new_price_per_token > previous_price {
+                (new_price_per_token - previous_price)
                     .checked_mul(100)
                     .ok_or(FinancingError::MathOverflow)?
                     .checked_div(previous_price)
                     .ok_or(FinancingError::MathOverflow)?
             } else {
-                (previous_price - collateral_usd_value)
+                (previous_price - new_price_per_token)
                     .checked_mul(100)
                     .ok_or(FinancingError::MathOverflow)?
                     .checked_div(previous_price)
@@ -414,7 +415,7 @@ pub mod financing_engine {
         }
 
         // Update price and slot
-        state.last_collateral_price = collateral_usd_value;
+        state.last_collateral_price = new_price_per_token;
         state.last_price_update_slot = Clock::get()?.slot;
         // ========== END PRICE DEVIATION CHECK ==========
 
@@ -938,6 +939,13 @@ pub mod financing_engine {
         msg!("  Updated collateral value: ${} → ${}",
             original_collateral_value / 100_000_000,
             state.collateral_usd_value / 100_000_000);
+
+        if state.collateral_amount > 0 {
+            state.last_collateral_price = collateral_price_per_token(
+                state.collateral_usd_value,
+                state.collateral_amount,
+            )?;
+        }
         // ========== END SECURITY FIX (CRITICAL-03) ==========
 
         // financed_amount tracking remains unchanged (user still owns it)
@@ -1328,6 +1336,13 @@ fn compute_ltv(obligations: u64, collateral_value: u64) -> Result<u64> {
         .checked_mul(10_000)
         .ok_or(FinancingError::MathOverflow)?
         / collateral_value)
+}
+
+fn collateral_price_per_token(collateral_value: u64, collateral_amount: u64) -> Result<u64> {
+    require!(collateral_amount > 0, FinancingError::ZeroCollateral);
+    Ok((collateral_value as u128)
+        .checked_div(collateral_amount as u128)
+        .ok_or(FinancingError::MathOverflow)? as u64)
 }
 
 // Public math helpers for tests and SDK reference.
@@ -1946,7 +1961,7 @@ pub struct FinancingState {
     /// Liquidation reentrancy guard
     pub is_being_liquidated: bool,
 
-    /// Last collateral price (8 decimals) for deviation detection
+    /// Last per-token collateral price (8 decimals) for deviation detection
     pub last_collateral_price: u64,
 
     /// Slot when collateral price was last updated
