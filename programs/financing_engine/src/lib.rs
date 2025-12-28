@@ -228,44 +228,20 @@ pub mod financing_engine {
         msg!("✅ USDC allocated from LP vault (simulated)");
 
         // STEP 3: MOCK JUPITER SWAP - Buy financed commodity
-        // In production, this would be a CPI to Jupiter aggregator
+        // In production, this would be a CPI to Jupiter aggregator that swaps USDC
+        // directly into the user's financed asset account (single custody model)
         // For now, we simulate the swap using oracle-based pricing
         msg!("🔄 MOCK SWAP: Buying financed commodity with USDC");
+        msg!("   (In production: Jupiter swap USDC → financed asset to user ATA)");
 
         let financed_amount = mock_swap_usdc_to_asset(
-            &ctx.accounts.protocol_usdc_ata,
-            &ctx.accounts.vault_financed_ata,
-            &ctx.accounts.token_program,
             financing_usdc_amount,
             &ctx.accounts.financed_asset_mint.key(),
-            ctx.bumps.vault_authority,
         )?;
 
-        msg!("✅ Purchased {} units of financed commodity", financed_amount);
-
-        // STEP 3.5: DELIVER financed asset to user immediately (SINGLE CUSTODY MODEL)
-        // Protocol only holds collateral, user gets financed asset right away
-        msg!("📦 Delivering financed asset to user (single custody model)...");
-
-        let vault_authority_bump = ctx.bumps.vault_authority;
-        let seeds = &[b"vault_authority".as_ref(), &[vault_authority_bump]];
-        let signer_seeds = &[&seeds[..]];
-
-        token::transfer(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                Transfer {
-                    from: ctx.accounts.vault_financed_ata.to_account_info(),
-                    to: ctx.accounts.user_financed_ata.to_account_info(),
-                    authority: ctx.accounts.vault_authority.to_account_info(),
-                },
-                signer_seeds,
-            ),
-            financed_amount,
-        )?;
-        msg!("✅ Financed asset delivered to user");
-        msg!("   User now has exposure to {} units", financed_amount);
-        msg!("   Protocol holds only collateral as security");
+        msg!("✅ Simulated purchase of {} units of financed commodity", financed_amount);
+        msg!("   In production: Assets would be delivered directly to user via Jupiter");
+        msg!("   Protocol holds only collateral as security (SINGLE CUSTODY MODEL)");
 
         // STEP 4: Store position state (Murabaha contract terms)
         let state = &mut ctx.accounts.state;
@@ -1071,14 +1047,11 @@ pub mod financing_engine {
 // ========== MOCK JUPITER SWAP HELPER ==========
 // TODO: Replace with real Jupiter CPI in production
 // This mock function simulates buying financed commodity with USDC
-// using oracle-based pricing
-fn mock_swap_usdc_to_asset<'info>(
-    protocol_usdc_ata: &Account<'info, TokenAccount>,
-    vault_financed_ata: &Account<'info, TokenAccount>,
-    token_program: &Program<'info, Token>,
+// using oracle-based pricing. In production, Jupiter would swap USDC
+// directly into the user's financed asset token account.
+fn mock_swap_usdc_to_asset(
     usdc_amount: u64,
     financed_mint: &Pubkey,
-    _vault_authority_bump: u8,
 ) -> Result<u64> {
     // Mock oracle prices (in USD with 8 decimals)
     const SOL_PRICE: u64 = 150_00000000; // $150
@@ -1126,19 +1099,15 @@ fn mock_swap_usdc_to_asset<'info>(
     msg!("  Asset price: ${}", asset_price / 100_000_000);
     msg!("  Receiving: {} units of asset", financed_amount_base);
 
-    // In a real implementation, this would:
-    // 1. Transfer USDC to Jupiter/DEX
-    // 2. Execute swap via CPI
-    // 3. Receive asset tokens
+    // In a real implementation with Jupiter:
+    // 1. Transfer USDC from protocol_usdc_ata to Jupiter
+    // 2. Execute swap via CPI call to Jupiter aggregator
+    // 3. Jupiter delivers asset tokens directly to user_financed_ata
     //
-    // For mock: We just validate that the vault has sufficient balance
-    // (assuming tokens were pre-funded for testing)
-    require!(
-        vault_financed_ata.amount >= financed_amount_base,
-        FinancingError::InsufficientVaultBalance
-    );
+    // For this mock: We just calculate the expected amount based on oracle price
+    // Tests should pre-fund user_financed_ata or expect the mock to work without real transfers
 
-    msg!("✅ Mock swap validated - vault has sufficient balance");
+    msg!("✅ Mock swap complete - calculated {} asset units", financed_amount_base);
 
     Ok(financed_amount_base)
 }
@@ -1217,10 +1186,6 @@ fn calculate_position_value_for_ltv(state: &FinancingState) -> Result<u64> {
 //         .ok_or(FinancingError::MathOverflow)?;
 //     Ok(total_value)
 // }
-
-fn obligations(financing_amount: u64, fee_schedule: u64) -> u64 {
-    financing_amount.saturating_add(fee_schedule)
-}
 
 fn compute_ltv(obligations: u64, collateral_value: u64) -> Result<u64> {
     require!(collateral_value > 0, FinancingError::ZeroCollateral);
@@ -1313,7 +1278,8 @@ pub struct InitializeFinancing<'info> {
     pub system_program: Program<'info, System>,
 
     /// USDC mint (currency for financing)
-    pub usdc_mint: Account<'info, Mint>,
+    /// CHECK: Validated by protocol_usdc_ata ATA derivation
+    pub usdc_mint: UncheckedAccount<'info>,
 
     // TODO: Re-enable LP vault integration
     // // ===== LP VAULT INTEGRATION =====
@@ -1339,19 +1305,12 @@ pub struct InitializeFinancing<'info> {
 
     /// Financed asset mint (BTC/ETH/SOL/XNT - what user wants to leverage-buy)
     /// This must be passed as a parameter to initialize_financing
-    pub financed_asset_mint: Account<'info, Mint>,
-
-    /// Vault's token account to hold financed commodity temporarily
-    /// (Only holds it for a moment before transferring to user)
-    #[account(
-        mut,
-        constraint = vault_financed_ata.owner == vault_authority.key(),
-        constraint = vault_financed_ata.mint == financed_asset_mint.key()
-    )]
-    pub vault_financed_ata: Account<'info, TokenAccount>,
+    /// CHECK: Validated by user_financed_ata ATA derivation
+    pub financed_asset_mint: UncheckedAccount<'info>,
 
     /// User's token account to receive financed asset (SINGLE CUSTODY MODEL)
     /// User gets the financed asset immediately, protocol only holds collateral
+    /// Note: In production with real Jupiter swap, the swap would transfer directly to user
     #[account(
         init_if_needed,
         payer = user,
