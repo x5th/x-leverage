@@ -279,6 +279,13 @@ pub mod financing_engine {
         state.delegated_liquidation_authority = Pubkey::default();
         state.position_status = PositionStatus::Active;
 
+        // ========== SECURITY FIX: INITIALIZE NEW SECURITY FIELDS ==========
+        state.is_being_liquidated = false;
+        state.last_collateral_price = collateral_usd_value;
+        state.last_price_update_slot = Clock::get()?.slot;
+        msg!("✅ Security fields initialized: price tracking and reentrancy guard enabled");
+        // ========== END SECURITY FIELD INITIALIZATION ==========
+
         // Update total_positions to track highest index used
         // Allow skipping indices for migration/flexibility
         if position_index >= ctx.accounts.position_counter.total_positions {
@@ -379,6 +386,37 @@ pub mod financing_engine {
         msg!("✅ Authority validated: oracle price update authorized");
 
         // ========== END SECURITY FIX ==========
+
+        // ========== SECURITY FIX (CRITICAL-04): PRICE DEVIATION CHECK ==========
+        // Check for large price changes (>10%) to prevent manipulation
+        let previous_price = state.last_collateral_price;
+        if previous_price > 0 {
+            let price_change_pct = if collateral_usd_value > previous_price {
+                (collateral_usd_value - previous_price)
+                    .checked_mul(100)
+                    .ok_or(FinancingError::MathOverflow)?
+                    .checked_div(previous_price)
+                    .ok_or(FinancingError::MathOverflow)?
+            } else {
+                (previous_price - collateral_usd_value)
+                    .checked_mul(100)
+                    .ok_or(FinancingError::MathOverflow)?
+                    .checked_div(previous_price)
+                    .ok_or(FinancingError::MathOverflow)?
+            };
+
+            require!(
+                price_change_pct <= 10,  // Max 10% change per update
+                FinancingError::PriceDeviationTooHigh
+            );
+
+            msg!("✅ Price change: {}% (within 10% limit)", price_change_pct);
+        }
+
+        // Update price and slot
+        state.last_collateral_price = collateral_usd_value;
+        state.last_price_update_slot = Clock::get()?.slot;
+        // ========== END PRICE DEVIATION CHECK ==========
 
         let previous_collateral_value = state.collateral_usd_value;
         state.collateral_usd_value = collateral_usd_value;
@@ -720,6 +758,25 @@ pub mod financing_engine {
         let state = &mut ctx.accounts.state;
         let clock = Clock::get()?;
 
+        // ========== SECURITY FIX (HIGH-01): REENTRANCY GUARD ==========
+        require!(
+            !state.is_being_liquidated,
+            FinancingError::LiquidationInProgress
+        );
+        state.is_being_liquidated = true;
+        msg!("🔒 Liquidation lock acquired");
+        // ========== END REENTRANCY GUARD ==========
+
+        // ========== SECURITY FIX (CRITICAL-04): PRICE DELAY CHECK ==========
+        // Prevent liquidation immediately after price update to mitigate manipulation
+        require!(
+            clock.slot >= state.last_price_update_slot.saturating_add(2),
+            FinancingError::PriceUpdateTooRecent
+        );
+        msg!("✅ Price update delay satisfied ({} slots since update)",
+            clock.slot.saturating_sub(state.last_price_update_slot));
+        // ========== END PRICE DELAY CHECK ==========
+
         // STEP 1: Calculate current LTV (COLLATERAL ONLY - Single Custody)
         let collateral_value = calculate_position_value_for_ltv(state)?;
         let current_ltv = compute_ltv(state.deferred_payment_amount, collateral_value)?;
@@ -750,12 +807,42 @@ pub mod financing_engine {
 
         msg!("  Liquidating {}% of position", liquidation_percentage);
 
+        // ========== SECURITY FIX (HIGH-04): MINIMUM LIQUIDATION ENFORCEMENT ==========
+        const MIN_LIQUIDATION_PCT: u8 = 25; // 25% minimum
+        const MIN_REMAINING_DEBT: u64 = 100_000_000; // $100 in 6 decimals USDC
+
+        // For partial liquidations, enforce minimum percentage
+        if liquidation_percentage < 100 {
+            require!(
+                liquidation_percentage >= MIN_LIQUIDATION_PCT,
+                FinancingError::LiquidationAmountTooSmall
+            );
+
+            msg!("✅ Partial liquidation validated: {}% (≥{}%)",
+                liquidation_percentage, MIN_LIQUIDATION_PCT);
+        }
+        // ========== END MINIMUM LIQUIDATION ENFORCEMENT ==========
+
         // STEP 4: Calculate amounts
         let debt_to_repay = state.deferred_payment_amount
             .checked_mul(liquidation_percentage as u64)
             .ok_or(FinancingError::MathOverflow)?
             .checked_div(100)
             .ok_or(FinancingError::MathOverflow)?;
+
+        // ========== SECURITY FIX (HIGH-04): CHECK REMAINING DEBT ==========
+        // If partial liquidation would leave dust, require full liquidation instead
+        if liquidation_percentage < 100 {
+            let remaining_debt = state.deferred_payment_amount
+                .checked_sub(debt_to_repay)
+                .ok_or(FinancingError::MathOverflow)?;
+
+            if remaining_debt > 0 && remaining_debt < MIN_REMAINING_DEBT {
+                state.is_being_liquidated = false; // Release lock before error
+                return Err(FinancingError::PositionTooSmallToPartialLiquidate.into());
+            }
+        }
+        // ========== END REMAINING DEBT CHECK ==========
 
         let liquidator_bonus = debt_to_repay
             .checked_mul(EXTERNAL_LIQUIDATOR_BONUS_BPS)
@@ -819,20 +906,39 @@ pub mod financing_engine {
             collateral_to_seize,
         )?;
 
+        // ========== SECURITY FIX (CRITICAL-03): IMPROVED STATE CALCULATION ==========
         // STEP 7: Update position state (reduce debt and collateral)
+        // Store original values BEFORE updating state
+        let original_collateral_amount = state.collateral_amount;
+        let original_collateral_value = state.collateral_usd_value;
+
+        // Update debt
         state.deferred_payment_amount = state.deferred_payment_amount
             .checked_sub(debt_to_repay)
             .ok_or(FinancingError::MathOverflow)?;
+
+        // Update collateral amount
         state.collateral_amount = state.collateral_amount
             .checked_sub(collateral_to_seize)
             .ok_or(FinancingError::MathOverflow)?;
 
-        // Update collateral USD value proportionally
-        state.collateral_usd_value = state.collateral_usd_value
+        // Calculate new proportional value using NEW amount / ORIGINAL amount
+        state.collateral_usd_value = original_collateral_value
             .checked_mul(state.collateral_amount)
             .ok_or(FinancingError::MathOverflow)?
-            .checked_div(state.collateral_amount.checked_add(collateral_to_seize).ok_or(FinancingError::MathOverflow)?)
+            .checked_div(original_collateral_amount)
             .ok_or(FinancingError::MathOverflow)?;
+
+        // Sanity check: new value should be less than or equal to original
+        require!(
+            state.collateral_usd_value <= original_collateral_value,
+            FinancingError::InvalidCalculation
+        );
+
+        msg!("  Updated collateral value: ${} → ${}",
+            original_collateral_value / 100_000_000,
+            state.collateral_usd_value / 100_000_000);
+        // ========== END SECURITY FIX (CRITICAL-03) ==========
 
         // financed_amount tracking remains unchanged (user still owns it)
 
@@ -853,6 +959,11 @@ pub mod financing_engine {
             timestamp: clock.unix_timestamp,
         });
 
+        // ========== SECURITY FIX (HIGH-01): RELEASE REENTRANCY LOCK ==========
+        state.is_being_liquidated = false;
+        msg!("🔓 Liquidation lock released");
+        // ========== END REENTRANCY LOCK RELEASE ==========
+
         Ok(())
     }
 
@@ -867,6 +978,16 @@ pub mod financing_engine {
 
         let state = &mut ctx.accounts.state;
         let config = &ctx.accounts.protocol_config;
+        let clock = Clock::get()?;
+
+        // ========== SECURITY FIX (HIGH-01): REENTRANCY GUARD ==========
+        require!(
+            !state.is_being_liquidated,
+            FinancingError::LiquidationInProgress
+        );
+        state.is_being_liquidated = true;
+        msg!("🔒 Protocol liquidation lock acquired");
+        // ========== END REENTRANCY GUARD ==========
 
         // ========== AUTHORITY VALIDATION ==========
         // Only protocol admin can force liquidate
@@ -876,6 +997,16 @@ pub mod financing_engine {
         );
         msg!("✅ Authority validated: protocol admin force liquidation");
         // ========== END AUTHORITY VALIDATION ==========
+
+        // ========== SECURITY FIX (CRITICAL-04): PRICE DELAY CHECK ==========
+        // Prevent liquidation immediately after price update to mitigate manipulation
+        require!(
+            clock.slot >= state.last_price_update_slot.saturating_add(2),
+            FinancingError::PriceUpdateTooRecent
+        );
+        msg!("✅ Price update delay satisfied ({} slots since update)",
+            clock.slot.saturating_sub(state.last_price_update_slot));
+        // ========== END PRICE DELAY CHECK ==========
 
         // STEP 1: Calculate current LTV (COLLATERAL ONLY - Single Custody)
         let collateral_value = calculate_position_value_for_ltv(state)?;
@@ -896,7 +1027,6 @@ pub mod financing_engine {
         msg!("✅ Position is at protocol threshold (≥75%)");
 
         let total_debt = state.deferred_payment_amount;
-        let clock = Clock::get()?;
 
         // SINGLE CUSTODY: We only have collateral to liquidate
         // User owns the financed asset, so protocol sells collateral on DEX to recover debt
@@ -987,6 +1117,11 @@ pub mod financing_engine {
             forced: true,
             timestamp: clock.unix_timestamp,
         });
+
+        // ========== SECURITY FIX (HIGH-01): RELEASE REENTRANCY LOCK ==========
+        state.is_being_liquidated = false;
+        msg!("🔓 Protocol liquidation lock released");
+        // ========== END REENTRANCY LOCK RELEASE ==========
 
         Ok(())
     }
@@ -1806,6 +1941,16 @@ pub struct FinancingState {
     pub delegated_settlement_authority: Pubkey,
     pub delegated_liquidation_authority: Pubkey,
     pub position_status: PositionStatus,
+
+    // Security fields for liquidation protection
+    /// Liquidation reentrancy guard
+    pub is_being_liquidated: bool,
+
+    /// Last collateral price (8 decimals) for deviation detection
+    pub last_collateral_price: u64,
+
+    /// Slot when collateral price was last updated
+    pub last_price_update_slot: u64,
 }
 
 impl FinancingState {
@@ -1829,7 +1974,10 @@ impl FinancingState {
         + 4 + 10 * 32 // oracle vector capped at 10
         + 32 // delegated_settlement_authority
         + 32 // delegated_liquidation_authority
-        + 1; // position_status
+        + 1 // position_status
+        + 1 // is_being_liquidated
+        + 8 // last_collateral_price
+        + 8; // last_price_update_slot
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, PartialEq, Eq)]
@@ -2060,4 +2208,17 @@ pub enum FinancingError {
     UseProtocolLiquidation,
     #[msg("Liquidation percentage exceeds maximum allowed (50% for external liquidators)")]
     ExcessiveLiquidationPercentage,
+    // Liquidation security errors
+    #[msg("Price deviation too high (>10% change)")]
+    PriceDeviationTooHigh,
+    #[msg("Price updated too recently for liquidation (wait 2 blocks)")]
+    PriceUpdateTooRecent,
+    #[msg("Liquidation already in progress")]
+    LiquidationInProgress,
+    #[msg("Liquidation amount too small (min 25%)")]
+    LiquidationAmountTooSmall,
+    #[msg("Position too small for partial liquidation (require full liquidation)")]
+    PositionTooSmallToPartialLiquidate,
+    #[msg("Invalid calculation result")]
+    InvalidCalculation,
 }
