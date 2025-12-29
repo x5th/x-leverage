@@ -34,6 +34,62 @@ fn deserialize_anchor_account<T: AccountDeserialize>(account: &Account) -> T {
     T::try_deserialize(&mut account.data.as_slice()).expect("deserialize account")
 }
 
+fn collateral_price_per_token(collateral_usd_value: u64, collateral_amount: u64) -> u64 {
+    if collateral_amount == 0 {
+        0
+    } else {
+        collateral_usd_value / collateral_amount
+    }
+}
+
+fn build_financing_state(
+    user_pubkey: Pubkey,
+    position_index: u64,
+    collateral_mint: Pubkey,
+    collateral_amount: u64,
+    collateral_usd_value: u64,
+    financed_mint: Pubkey,
+    financed_amount: u64,
+    financed_purchase_price_usdc: u64,
+    deferred_payment_amount: u64,
+    markup_fees: u64,
+    initial_ltv: u64,
+    max_ltv: u64,
+    liquidation_threshold: u64,
+    term_start: i64,
+    term_end: i64,
+    carry_enabled: bool,
+    oracle_sources: Vec<Pubkey>,
+    position_status: PositionStatus,
+) -> FinancingState {
+    FinancingState {
+        user_pubkey,
+        position_index,
+        collateral_mint,
+        collateral_amount,
+        collateral_usd_value,
+        financed_mint,
+        financed_amount,
+        financed_purchase_price_usdc,
+        financed_usd_value: financed_purchase_price_usdc,
+        deferred_payment_amount,
+        markup_fees,
+        initial_ltv,
+        max_ltv,
+        liquidation_threshold,
+        term_start,
+        term_end,
+        carry_enabled,
+        oracle_sources,
+        delegated_settlement_authority: Pubkey::default(),
+        delegated_liquidation_authority: Pubkey::default(),
+        position_status,
+        is_being_liquidated: false,
+        last_collateral_price: collateral_price_per_token(collateral_usd_value, collateral_amount),
+        last_price_update_slot: 0,
+    }
+}
+
 fn financing_engine_processor<'a, 'b, 'c, 'd>(
     program_id: &'a Pubkey,
     accounts: &'b [AccountInfo<'c>],
@@ -167,9 +223,10 @@ async fn test_close_at_maturity_rejects_invalid_vault_financed_owner() {
     let admin = Keypair::new();
     let collateral_mint = Pubkey::new_unique();
     let financed_mint = Pubkey::new_unique();
+    let position_index = 0u64;
 
     let (state_pda, _) = Pubkey::find_program_address(
-        &[b"financing", user.pubkey().as_ref(), collateral_mint.as_ref()],
+        &[b"financing", user.pubkey().as_ref(), &position_index.to_le_bytes()],
         &financing_engine::id(),
     );
     let (position_counter_pda, _) = Pubkey::find_program_address(
@@ -219,24 +276,26 @@ async fn test_close_at_maturity_rejects_invalid_vault_financed_owner() {
         state_pda,
         Account {
             lamports: 1_000_000,
-            data: serialize_anchor_account(&FinancingState {
-                user_pubkey: user.pubkey(),
+            data: serialize_anchor_account(&build_financing_state(
+                user.pubkey(),
+                0,
                 collateral_mint,
-                collateral_amount: 5_000,
-                collateral_usd_value: 100_000_000,
-                financing_amount: 10_000,
-                initial_ltv: 5_000,
-                max_ltv: 8_000,
-                term_start: 0,
-                term_end: 0,
-                fee_schedule: 0,
-                carry_enabled: false,
-                liquidation_threshold: 0,
-                oracle_sources: Vec::new(),
-                delegated_settlement_authority: Pubkey::default(),
-                delegated_liquidation_authority: Pubkey::default(),
-                position_status: PositionStatus::Active,
-            }),
+                5_000,
+                100_000_000,
+                financed_mint,
+                10_000,
+                10_000,
+                10_000,
+                0,
+                5_000,
+                8_000,
+                0,
+                0,
+                0,
+                false,
+                Vec::new(),
+                PositionStatus::Active,
+            )),
             owner: financing_engine::id(),
             executable: false,
             rent_epoch: 0,
@@ -249,6 +308,7 @@ async fn test_close_at_maturity_rejects_invalid_vault_financed_owner() {
             data: serialize_anchor_account(&UserPositionCounter {
                 user: user.pubkey(),
                 open_positions: 1,
+                total_positions: 1,
             }),
             owner: financing_engine::id(),
             executable: false,
@@ -403,9 +463,10 @@ async fn test_full_position_lifecycle() {
     let collateral_mint = Pubkey::new_unique();
     let financed_mint = Pubkey::new_unique();
     let oracle_accounts = Pubkey::new_unique();
+    let position_index = 0u64;
 
     let (state_pda, _) = Pubkey::find_program_address(
-        &[b"financing", user.pubkey().as_ref(), collateral_mint.as_ref()],
+        &[b"financing", user.pubkey().as_ref(), &position_index.to_le_bytes()],
         &financing_engine::id(),
     );
     let (position_counter_pda, _) = Pubkey::find_program_address(
@@ -583,14 +644,15 @@ async fn test_full_position_lifecycle() {
         program_id: financing_engine::id(),
         accounts: open_accounts.to_account_metas(None),
         data: financing_engine::instruction::InitializeFinancing {
+            position_index: 0,
             collateral_amount,
             collateral_usd_value: MIN_COLLATERAL_USD,
             financing_amount,
+            markup_bps: 0,
             initial_ltv: 5_000,
             max_ltv: 8_000,
             term_start: -100,
             term_end: -50,
-            fee_schedule: 0,
             carry_enabled: false,
             liquidation_threshold: 8_500,
             oracle_sources: oracle_sources(),
@@ -614,7 +676,7 @@ async fn test_full_position_lifecycle() {
         program_id: financing_engine::id(),
         accounts: update_accounts.to_account_metas(None),
         data: financing_engine::instruction::UpdateLtv {
-            collateral_usd_value: 150_000_000,
+            collateral_usd_value: 105_000_000,
         }
         .data(),
     };
@@ -702,29 +764,32 @@ async fn test_liquidation_flow() {
         &[b"protocol_config"],
         &financing_engine::id(),
     );
+    let position_index = 0u64;
     let (state_pda, _) = Pubkey::find_program_address(
-        &[b"financing", user.pubkey().as_ref(), oracle_feed.as_ref()],
+        &[b"financing", user.pubkey().as_ref(), &position_index.to_le_bytes()],
         &financing_engine::id(),
     );
 
-    let financing_state = FinancingState {
-        user_pubkey: user.pubkey(),
-        collateral_mint: oracle_feed,
-        collateral_amount: 0,
-        collateral_usd_value: 200_000_000,
-        financing_amount: 150_000_000,
-        initial_ltv: 5_000,
-        max_ltv: 8_000,
-        term_start: 0,
-        term_end: 0,
-        fee_schedule: 0,
-        carry_enabled: false,
-        liquidation_threshold: 8_000,
-        oracle_sources: vec![oracle_authority.pubkey()],
-        delegated_settlement_authority: Pubkey::default(),
-        delegated_liquidation_authority: Pubkey::default(),
-        position_status: PositionStatus::Active,
-    };
+    let financing_state = build_financing_state(
+        user.pubkey(),
+        0,
+        oracle_feed,
+        0,
+        200_000_000,
+        Pubkey::new_unique(),
+        150_000_000,
+        150_000_000,
+        150_000_000,
+        0,
+        5_000,
+        8_000,
+        8_000,
+        0,
+        0,
+        false,
+        vec![oracle_authority.pubkey()],
+        PositionStatus::Active,
+    );
 
     program_test.add_account(
         protocol_config_pda,
@@ -842,7 +907,7 @@ async fn test_liquidation_flow() {
     assert_eq!(oracle_state.pyth_price, 100_000_000);
 
     let ltv = financing_engine::ltv_model(
-        financing_state.financing_amount,
+        financing_state.deferred_payment_amount,
         oracle_state.pyth_price as u64,
     )
     .expect("ltv");
